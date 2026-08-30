@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # ----------------------------------------------------
+  # DATABASE: MongoDB
+  # ----------------------------------------------------
+  mongodb:
+    image: mongo:6.0
+    container_name: bdapps_mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin_password
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - bdapps_network
+
+  # ----------------------------------------------------
+  # CACHE & QUEUE: Redis
+  # ----------------------------------------------------
+  redis:
+    image: redis:7.0-alpine
+    container_name: bdapps_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - bdapps_network
+
+  # ----------------------------------------------------
+  # REVERSE PROXY: Nginx (Placeholder for now)
+  # ----------------------------------------------------
+  # We will add Nginx configs later when we deploy the frontend and API gateway.
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: bdapps_nginx
+  #   restart: always
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   networks:
+  #     - bdapps_network
+
+  # ----------------------------------------------------
+  # MONITORING: Prometheus
+  # ----------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: bdapps_prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+    networks:
+      - bdapps_network
+
+  # ----------------------------------------------------
+  # MONITORING: Grafana
+  # ----------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: bdapps_grafana
+    restart: always
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - bdapps_network
+
+volumes:
+  mongodb_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  bdapps_network:
