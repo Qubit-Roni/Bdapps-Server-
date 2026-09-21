@@ -1,0 +1,106 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main # Change this to master if your default branch is master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          script: |
+            # 1. Setup Directory and Pull Latest Code
+            mkdir -p /var/www/roni/qubitzone
+            cd /var/www/roni/qubitzone
+            
+            if [ ! -d ".git" ]; then
+              git clone https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git .
+            else
+              git config --global --add safe.directory /var/www/roni/qubitzone
+              git remote set-url origin https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+              git fetch origin
+              git checkout main
+              git reset --hard origin/main
+              git clean -fd
+            fi
+            
+            # 2. Setup & Start Database (Docker)
+            echo "Starting Docker containers..."
+            cd docker
+            docker-compose up -d
+            cd ..
+            
+            # 3. Build & Restart Backend Microservices
+            echo "Setting up Backend Services..."
+            cd backend
+            # Install dependencies for each microservice
+            for dir in *-service api-gateway; do
+              if [ -d "$dir" ]; then
+                echo "Installing dependencies in $dir"
+                cd "$dir"
+                npm install
+                cd ..
+              fi
+            done
+            # Restart backend using PM2
+            pm2 start ecosystem.config.js || pm2 restart ecosystem.config.js
+            cd ..
+            
+            # 4. Build & Restart Frontend (Next.js)
+            echo "Setting up Frontend..."
+            cd frontend
+            echo "NEXT_PUBLIC_API_URL=https://qubitzone.app" > .env
+            npm install
+            npm run build
+            # Assuming you run frontend with pm2
+            pm2 restart bdapps-frontend || pm2 start node_modules/next/dist/bin/next --name "bdapps-frontend" -- start -p 3015
+            cd ..
+            
+            
+            # 5. Setup Nginx and SSL
+            echo "Checking Nginx configuration..."
+            if [ ! -f "/etc/nginx/sites-available/qubitzone.app" ]; then
+              echo "Creating Nginx configuration for qubitzone.app..."
+              cat << 'EOF' > /tmp/qubitzone.app.conf
+            server {
+                listen 80;
+                server_name qubitzone.app www.qubitzone.app;
+            
+                location /api/ {
+                    proxy_pass http://127.0.0.1:4000;
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade $http_upgrade;
+                    proxy_set_header Connection 'upgrade';
+                    proxy_set_header Host $host;
+                    proxy_cache_bypass $http_upgrade;
+                }
+            
+                location / {
+                    proxy_pass http://127.0.0.1:3015;
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade $http_upgrade;
+                    proxy_set_header Connection 'upgrade';
+                    proxy_set_header Host $host;
+                    proxy_cache_bypass $http_upgrade;
+                }
+            }
+            EOF
+              sudo mv /tmp/qubitzone.app.conf /etc/nginx/sites-available/qubitzone.app
+              sudo ln -sf /etc/nginx/sites-available/qubitzone.app /etc/nginx/sites-enabled/
+              sudo nginx -t && sudo systemctl reload nginx
+              
+              echo "Requesting SSL Certificate..."
+              sudo certbot --nginx -d qubitzone.app -d www.qubitzone.app --non-interactive --agree-tos --register-unsafely-without-email --redirect
+            else
+              echo "Nginx configuration already exists. Skipping creation to prevent overwriting."
+            fi
+            
+            echo "Deployment Completed Successfully!"
