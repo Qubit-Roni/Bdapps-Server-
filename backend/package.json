@@ -8,8 +8,11 @@
     "restart": "pm2 restart ecosystem.config.js",
     "status": "pm2 status",
     "logs": "pm2 logs",
-    "dev": "npx --yes concurrently -k -n \"API,AUTH,OTP,SMS,PROJ,SUB,ANAL,USSD\" -c \"cyan,magenta,yellow,green,blue,red,white,gray\" \"cd api-gateway && npm run dev\" \"cd auth-service && npm run dev\" \"cd otp-service && npm run dev\" \"cd sms-service && npm run dev\" \"cd project-service && npm run dev\" \"cd subscription-service && npm run dev\" \"cd analytics-service && npm run dev\" \"cd ussd-service && npm start\""
+    "dev": "concurrently -k -n \"API,AUTH,OTP,SMS,PROJ,SUB,ANAL,USSD\" -c \"cyan,magenta,yellow,green,blue,red,white,gray\" \"cd api-gateway && npm run dev\" \"cd auth-service && npm run dev\" \"cd otp-service && npm run dev\" \"cd sms-service && npm run dev\" \"cd project-service && npm run dev\" \"cd subscription-service && npm run dev\" \"cd analytics-service && npm run dev\" \"cd ussd-service && npm start\""
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "concurrently": "^10.0.5"
+  }
 }
